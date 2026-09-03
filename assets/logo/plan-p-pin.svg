@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="플랜P">
+  <path fill="#1D4ED8" d="M512,900 L281,595.3 A290,290 0 1 1 743,595.3 Z"/>
+  <g transform="translate(512,420) scale(0.58) translate(-512,-512)">
+    <path fill="#FFFFFF" d="M362,182 H462 A200,200 0 0 1 462,582 V842 H362 Z M462,282 V482 A100,100 0 0 0 462,282 Z"/>
+  </g>
+</svg>
