@@ -1,98 +1,87 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { Search } from 'lucide-react';
+import type { JSX } from 'react';
+import { useCallback, useState } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
-  return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
+import { KakaoMap } from '@/components/kakao-map';
+import { PlaceSheet } from '@/components/place-sheet';
+import { Colors, Radius, Spacing } from '@/constants/theme';
+import type { MapEvent, MapPlace } from '@/utils/kakao-map-html';
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
+  // 검색창은 지도 위에 떠 있는 카드다. 지도가 화면 끝까지 이어져 보여야 넓게 느껴진다
+  header: {
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    borderRadius: Radius.md,
+    elevation: 4,
     flexDirection: 'row',
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    shadowColor: '#000',
+    shadowOffset: { height: 2, width: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  headerLayer: { left: 0, position: 'absolute', right: 0, top: 0 },
+  screen: { backgroundColor: Colors.background, flex: 1, overflow: 'hidden' },
+  searchBox: { color: Colors.text, flex: 1, fontSize: 16, paddingVertical: Spacing.md },
+  searchButton: { paddingHorizontal: Spacing.xs, paddingVertical: Spacing.sm },
 });
+
+/**
+ * 홈 화면. 지도가 화면 전체를 채우고 검색창과 결과 시트가 그 위에 뜬다.
+ *
+ * 검색은 지도(웹뷰) 안의 카카오 services 라이브러리가 처리하고 결과만 올려받는다.
+ * @returns 홈 화면
+ */
+const HomeScreen = (): JSX.Element => {
+  const [input, setInput] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [places, setPlaces] = useState<MapPlace[]>([]);
+
+  const handleMapEvent = useCallback((event: MapEvent): void => {
+    if (event.type === 'results') {
+      setPlaces(event.places);
+    }
+  }, []);
+
+  /**
+   * 검색 실행. 타이핑마다 부르면 쿼터를 태우니 엔터나 아이콘에서만 부른다.
+   * @returns 없음
+   */
+  const handleSearch = (): void => setKeyword(input.trim());
+
+  return (
+    <View style={styles.screen}>
+      {/* 지도는 화면 전체를 채우고, 검색창·시트가 그 위에 뜬다 */}
+      <View style={StyleSheet.absoluteFill}>
+        <KakaoMap keyword={keyword} onEvent={handleMapEvent} />
+      </View>
+
+      <SafeAreaView edges={['top']} style={styles.headerLayer}>
+        <View style={styles.header}>
+          <TextInput
+            placeholder="어디로 가세요?"
+            placeholderTextColor={Colors.muted}
+            returnKeyType="search"
+            style={styles.searchBox}
+            value={input}
+            onChangeText={setInput}
+            onSubmitEditing={handleSearch}
+          />
+          <Pressable style={styles.searchButton} onPress={handleSearch}>
+            <Search color={Colors.muted} size={20} />
+          </Pressable>
+        </View>
+      </SafeAreaView>
+
+      <PlaceSheet keyword={keyword} places={places} />
+    </View>
+  );
+};
+
+export default HomeScreen;
