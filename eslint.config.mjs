@@ -26,7 +26,7 @@ const baseRestrictedSyntax = [
 ];
 
 export default defineConfig([
-  { ignores: ['dist/*', '.expo/*', 'scripts/*', 'expo-env.d.ts'] },
+  { ignores: ['dist/*', '.expo/*', 'scripts/*', 'supabase/functions/*', 'expo-env.d.ts'] },
   expoConfig,
   tseslintConfigs.recommended,
   jsdoc.configs['flat/recommended-typescript-error'],
