@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import type { KakaoMapProps } from '@/components/kakao-map';
+import { useMapCommands } from '@/hooks/use-map-commands';
 import { KAKAO_JS_KEY } from '@/constants/env';
 import { Colors, Spacing } from '@/constants/theme';
 import { parseMapEvent } from '@/utils/kakao-map-html';
@@ -61,6 +62,7 @@ export const KakaoMap = ({
   pins,
   path,
   activePath,
+  myLocation,
 }: KakaoMapProps): JSX.Element => {
   const frameRef = useRef<HTMLIFrameElement>(null);
   // 지도가 뜨기 전에 보낸 명령은 사라진다. ready를 받은 뒤에 다시 보낸다
@@ -96,21 +98,7 @@ export const KakaoMap = ({
     [isReady],
   );
 
-  useEffect(() => {
-    send({ type: 'search', keyword });
-  }, [send, keyword]);
-
-  useEffect(() => {
-    if (pins !== undefined) {
-      send({ type: 'pins', pins, path, activePath });
-    }
-  }, [send, pins, path, activePath]);
-
-  useEffect(() => {
-    if (nearby !== undefined) {
-      send({ type: 'nearby', ...nearby });
-    }
-  }, [send, nearby]);
+  useMapCommands(send, { keyword, pins, path, activePath, nearby, myLocation });
 
   if (KAKAO_JS_KEY === '') {
     return <MissingKeyNotice />;

@@ -5,8 +5,11 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KakaoMap } from '@/components/kakao-map';
+import { LocateButton } from '@/components/locate-button';
 import { PlaceSheet } from '@/components/place-sheet';
+import { SHEET_HEIGHT } from '@/constants/parking';
 import { Colors, Radius, Spacing } from '@/constants/theme';
+import { useCurrentLocation } from '@/hooks/use-current-location';
 import type { MapEvent, MapPlace } from '@/utils/kakao-map-html';
 
 const styles = StyleSheet.create({
@@ -27,6 +30,8 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
   },
   headerLayer: { left: 0, position: 'absolute', right: 0, top: 0 },
+  // 시트 바로 위 오른쪽. 지도를 가리지 않으면서 엄지에 닿는 자리다
+  locateLayer: { bottom: SHEET_HEIGHT + Spacing.md, position: 'absolute', right: Spacing.lg },
   screen: { backgroundColor: Colors.background, flex: 1, overflow: 'hidden' },
   searchBox: { color: Colors.text, flex: 1, fontSize: 16, paddingVertical: Spacing.md },
   searchButton: { paddingHorizontal: Spacing.xs, paddingVertical: Spacing.sm },
@@ -42,6 +47,8 @@ const HomeScreen = (): JSX.Element => {
   const [input, setInput] = useState('');
   const [keyword, setKeyword] = useState('');
   const [places, setPlaces] = useState<MapPlace[]>([]);
+  // 홈에서는 자동으로 묻지 않는다. 버튼을 눌렀을 때만 권한을 요청한다
+  const { location, isLoading, isDenied, request } = useCurrentLocation({ auto: false });
 
   const handleMapEvent = useCallback((event: MapEvent): void => {
     if (event.type === 'results') {
@@ -59,7 +66,7 @@ const HomeScreen = (): JSX.Element => {
     <View style={styles.screen}>
       {/* 지도는 화면 전체를 채우고, 검색창·시트가 그 위에 뜬다 */}
       <View style={StyleSheet.absoluteFill}>
-        <KakaoMap keyword={keyword} onEvent={handleMapEvent} />
+        <KakaoMap keyword={keyword} myLocation={location} onEvent={handleMapEvent} />
       </View>
 
       <SafeAreaView edges={['top']} style={styles.headerLayer}>
@@ -78,6 +85,10 @@ const HomeScreen = (): JSX.Element => {
           </Pressable>
         </View>
       </SafeAreaView>
+
+      <View style={styles.locateLayer}>
+        <LocateButton isDenied={isDenied} isLoading={isLoading} onPress={request} />
+      </View>
 
       <PlaceSheet keyword={keyword} places={places} />
     </View>

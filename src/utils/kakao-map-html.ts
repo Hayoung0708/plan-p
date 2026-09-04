@@ -31,7 +31,8 @@ export type MapCommand =
       /** 그다음 후보들까지의 미리보기. 점선으로 흐리게 그린다 */
       path?: { lat: number; lng: number }[];
     }
-  | { type: 'focus'; id: string };
+  | { type: 'focus'; id: string }
+  | { type: 'locate'; lat: number; lng: number };
 
 /** 지도에 직접 찍는 점 하나. 검색과 달리 앱이 좌표를 정해서 내려보낸다 */
 export type MapPin = {
@@ -301,6 +302,22 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
         }
       };
 
+      // 내 위치는 후보 핀과 다른 모양이어야 한다. 파란 점에 흰 테두리로 지도 앱 관습을 따른다
+      var myLocationOverlay = null;
+      var showMyLocation = function (lat, lng) {
+        var position = new kakao.maps.LatLng(lat, lng);
+        if (myLocationOverlay) {
+          myLocationOverlay.setMap(null);
+        }
+        var dot = document.createElement('div');
+        dot.style.cssText =
+          'width:16px;height:16px;border-radius:8px;background:#1D4ED8;' +
+          'border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15),0 2px 6px rgba(0,0,0,.3);';
+        myLocationOverlay = new kakao.maps.CustomOverlay({ map: map, position: position, content: dot, zIndex: 10 });
+        map.setCenter(position);
+        map.setLevel(4);
+      };
+
       var focus = function (id) {
         var index = markers.findIndex(function (marker) { return marker.__planpId === id; });
         if (index >= 0) {
@@ -315,6 +332,7 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
         if (command.type === 'nearby') { searchNearbyParking(command.lat, command.lng, command.radius); }
         if (command.type === 'pins') { drawPins(command.pins, command.path, command.activePath); }
         if (command.type === 'focus') { focus(command.id); }
+        if (command.type === 'locate') { showMyLocation(command.lat, command.lng); }
       };
 
       // 웹(iframe)에서는 부모 창이 postMessage로 명령을 내린다

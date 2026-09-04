@@ -1,3 +1,6 @@
+/** 검색 결과 시트 높이. 플로팅 버튼을 이 위에 띄운다 */
+export const SHEET_HEIGHT = 280;
+
 /** 반경 프리셋(도보 분). 사용자가 만지는 값은 이것과 무료 토글 둘뿐 */
 export const RADIUS_PRESETS = [5, 10, 15] as const;
 

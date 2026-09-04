@@ -5,11 +5,9 @@ import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '@/constants/category-icon
 import type { JSX } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { SHEET_HEIGHT } from '@/constants/parking';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import type { MapPlace } from '@/utils/kakao-map-html';
-
-/** 시트 높이. 지도를 최대한 남기면서 결과 3~4개가 보이는 선 */
-const SHEET_HEIGHT = 280;
 
 export type PlaceSheetProps = {
   /** 검색 결과. 카카오 약관상 저장할 수 없어 화면 상태로만 들고 있다 */

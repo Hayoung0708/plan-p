@@ -1,9 +1,10 @@
 import type { JSX } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 
+import { useMapCommands } from '@/hooks/use-map-commands';
 import { KAKAO_JS_KEY, KAKAO_SITE_DOMAIN } from '@/constants/env';
 import { Colors, Spacing } from '@/constants/theme';
 import type { MapEvent, MapPin } from '@/utils/kakao-map-html';
@@ -22,6 +23,8 @@ export type KakaoMapProps = {
   path?: { lat: number; lng: number }[];
   /** 지금 가야 할 첫 구간. 실선으로 강조한다 */
   activePath?: { lat: number; lng: number }[];
+  /** 내 위치. 주면 파란 점으로 찍고 그 자리로 지도를 옮긴다 */
+  myLocation?: { lat: number; lng: number } | null;
 };
 
 const styles = StyleSheet.create({
@@ -62,34 +65,25 @@ export const KakaoMap = ({
   pins,
   path,
   activePath,
+  myLocation,
 }: KakaoMapProps): JSX.Element => {
   const webViewRef = useRef<WebView>(null);
   // 지도가 뜨기 전에 보낸 명령은 사라진다. ready를 받은 뒤에 다시 보낸다
   const [isReady, setIsReady] = useState(false);
 
-  useEffect(() => {
-    if (!isReady) {
-      return;
-    }
-    const payload = JSON.stringify(JSON.stringify({ type: 'search', keyword }));
-    webViewRef.current?.injectJavaScript('window.planpCommand(' + payload + '); true;');
-  }, [isReady, keyword]);
+  // 명령은 지도가 준비된 뒤에만 내려보낸다. 그전에 보낸 건 사라진다
+  const send = useCallback(
+    (command: object): void => {
+      if (!isReady) {
+        return;
+      }
+      const payload = JSON.stringify(JSON.stringify(command));
+      webViewRef.current?.injectJavaScript('window.planpCommand(' + payload + '); true;');
+    },
+    [isReady],
+  );
 
-  useEffect(() => {
-    if (!isReady || pins === undefined) {
-      return;
-    }
-    const payload = JSON.stringify(JSON.stringify({ type: 'pins', pins, path, activePath }));
-    webViewRef.current?.injectJavaScript('window.planpCommand(' + payload + '); true;');
-  }, [isReady, pins, path, activePath]);
-
-  useEffect(() => {
-    if (!isReady || nearby === undefined) {
-      return;
-    }
-    const payload = JSON.stringify(JSON.stringify({ type: 'nearby', ...nearby }));
-    webViewRef.current?.injectJavaScript('window.planpCommand(' + payload + '); true;');
-  }, [isReady, nearby]);
+  useMapCommands(send, { keyword, pins, path, activePath, nearby, myLocation });
 
   /**
    * 웹뷰 메시지를 이벤트로 바꿔 넘긴다.
