@@ -1,0 +1,23 @@
+name: 주차장 데이터 갱신
+
+# 배포 주기는 '반기'로 적혀 있지만 행마다 기준일이 달라 실제로는 수시로 바뀐다.
+# 수집 비용이 API 19회·2분이라 매일 돌리는 편이 폐업 주차장을 오래 안내하는 것보다 싸다
+on:
+  schedule:
+    - cron: '0 18 * * *' # 매일 03:00 KST
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 수집·적재
+        env:
+          DATA_GO_KR_SERVICE_KEY: ${{ secrets.DATA_GO_KR_SERVICE_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/ingest-parking.mjs

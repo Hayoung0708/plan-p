@@ -47,3 +47,6 @@ example
 
 # 로컬 환경 변수
 .env
+
+# Supabase CLI 임시 파일
+supabase/.temp/
