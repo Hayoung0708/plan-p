@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 
 import { SheetHeader } from '@/components/sheet-header';
-import { RADIUS_PRESETS } from '@/constants/mock';
+import { RADIUS_PRESETS } from '@/constants/parking';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 
 const styles = StyleSheet.create({

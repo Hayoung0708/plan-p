@@ -1,19 +1,14 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { CircleParking } from 'lucide-react';
 import type { JSX } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DriveButton } from '@/components/drive-button';
-import { CANDIDATE_QUEUE } from '@/constants/mock';
 import { Colors, Radius, Spacing } from '@/constants/theme';
-import { formatFee } from '@/utils/format';
-
-const [PARKED_LOT] = CANDIDATE_QUEUE;
 
 const styles = StyleSheet.create({
   body: { flex: 1, justifyContent: 'center', padding: Spacing.xl },
-  detail: { color: Colors.muted, fontSize: 15, marginTop: Spacing.xs },
   footer: { padding: Spacing.xl },
   name: { color: Colors.text, fontSize: 24, fontWeight: '700', marginTop: Spacing.md },
   saved: {
@@ -32,13 +27,13 @@ const styles = StyleSheet.create({
  * @returns 주차 완료 화면
  */
 const ParkedScreen = (): JSX.Element => {
-  const { name, hourlyFee } = PARKED_LOT;
+  const { name = '주차장' } = useLocalSearchParams<{ name?: string }>();
+
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.body}>
         <CircleParking color={Colors.brand} size={44} />
         <Text style={styles.name}>{name}</Text>
-        <Text style={styles.detail}>{formatFee(hourlyFee)}</Text>
         <Text style={styles.saved}>주차 위치와 시각을 저장했어요</Text>
       </View>
       <View style={styles.footer}>

@@ -15,11 +15,34 @@ export type MapPlace = {
 export type MapEvent =
   | { type: 'ready' }
   | { type: 'results'; places: MapPlace[] }
+  | { type: 'nearby'; places: MapPlace[] }
   | { type: 'select'; id: string }
   | { type: 'error'; message: string };
 
 /** 앱이 지도로 내려보내는 명령 */
-export type MapCommand = { type: 'search'; keyword: string } | { type: 'focus'; id: string };
+export type MapCommand =
+  | { type: 'search'; keyword: string }
+  | { type: 'nearby'; lat: number; lng: number; radius: number }
+  | {
+      type: 'pins';
+      pins: MapPin[];
+      /** 지금 가야 할 첫 구간. 실선으로 강조한다 */
+      activePath?: { lat: number; lng: number }[];
+      /** 그다음 후보들까지의 미리보기. 점선으로 흐리게 그린다 */
+      path?: { lat: number; lng: number }[];
+    }
+  | { type: 'focus'; id: string };
+
+/** 지도에 직접 찍는 점 하나. 검색과 달리 앱이 좌표를 정해서 내려보낸다 */
+export type MapPin = {
+  id: string;
+  lat: number;
+  lng: number;
+  /** 현재 안내 중인 곳. 하나만 강조하고 나머지는 작은 점으로 찍는다 */
+  primary: boolean;
+  /** 경로 미리보기에 붙일 순번. 없으면 그냥 점으로 찍는다 */
+  label?: string;
+};
 
 /** 서울시청. 위치 권한을 받기 전 기본 중심 */
 const DEFAULT_CENTER = { lat: 37.5666805, lng: 126.9784147 };
@@ -163,6 +186,121 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
         });
       };
 
+      // 공공데이터에 없는 민영 주차장을 채운다. 약관상 저장이 안 되므로 화면에만 쓰고 버린다
+      var searchNearbyParking = function (lat, lng, radius) {
+        places.categorySearch(
+          'PK6',
+          function (results, status) {
+            if (status !== kakao.maps.services.Status.OK) {
+              post({ type: 'nearby', places: [] });
+              return;
+            }
+            post({
+              type: 'nearby',
+              places: results.map(function (place) {
+                return {
+                  id: place.id,
+                  name: place.place_name,
+                  address: place.road_address_name || place.address_name,
+                  categoryCode: 'PK6',
+                  category: '주차장',
+                  lat: Number(place.y),
+                  lng: Number(place.x),
+                };
+              }),
+            });
+          },
+          { location: new kakao.maps.LatLng(lat, lng), radius: radius, sort: 'distance' }
+        );
+      };
+
+      // 앱이 정한 좌표만 찍는다. 검색과 달리 후보 외의 장소가 지도에 섞이지 않는다.
+      // 현재 안내 중인 곳만 마커로 강조하고 나머지는 작은 점으로 둔다
+      var overlays = [];
+      var clearOverlays = function () {
+        overlays.forEach(function (overlay) { overlay.setMap(null); });
+        overlays = [];
+      };
+
+      var lines = [];
+      var clearLines = function () {
+        lines.forEach(function (line) { line.setMap(null); });
+        lines = [];
+      };
+
+      // 순번이 붙은 후보는 원 안에 번호를 넣어 그린다. 미리보기 3곳이 여기 해당한다
+      var numberedDot = function (label) {
+        var dot = document.createElement('div');
+        dot.textContent = label;
+        dot.style.cssText =
+          'width:22px;height:22px;border-radius:11px;background:#1D4ED8;color:#fff;' +
+          'font:700 12px/22px -apple-system,system-ui,sans-serif;text-align:center;' +
+          'border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);';
+        return dot;
+      };
+
+      var plainDot = function () {
+        var dot = document.createElement('div');
+        dot.style.cssText =
+          'width:10px;height:10px;border-radius:5px;background:#1D4ED8;opacity:0.45;border:2px solid #fff;';
+        return dot;
+      };
+
+      var drawLine = function (points, isActive) {
+        if (!points || points.length < 2) {
+          return;
+        }
+        lines.push(new kakao.maps.Polyline({
+          map: map,
+          path: points.map(function (point) { return new kakao.maps.LatLng(point.lat, point.lng); }),
+          strokeWeight: isActive ? 6 : 4,
+          strokeColor: '#1D4ED8',
+          strokeOpacity: isActive ? 0.9 : 0.45,
+          strokeStyle: isActive ? 'solid' : 'shortdash',
+        }));
+      };
+
+      var drawPins = function (pins, path, activePath) {
+        clearMarkers();
+        clearOverlays();
+        clearLines();
+        var primary = null;
+
+        pins.forEach(function (pin) {
+          var position = new kakao.maps.LatLng(pin.lat, pin.lng);
+          if (pin.primary) {
+            primary = position;
+            var marker = new kakao.maps.Marker({ map: map, position: position });
+            kakao.maps.event.addListener(marker, 'click', function () {
+              post({ type: 'select', id: pin.id });
+            });
+            markers.push(marker);
+            return;
+          }
+          var content = pin.label ? numberedDot(pin.label) : plainDot();
+          var overlay = new kakao.maps.CustomOverlay({ map: map, position: position, content: content });
+          overlays.push(overlay);
+        });
+
+        // 지금 가야 할 길이 제일 또렷해야 한다. 뒤 후보는 미리보기라 흐린 점선으로 둔다
+        drawLine(path, false);
+        drawLine(activePath, true);
+
+        // 미리보기 구간에 맞춰 줌을 잡는다. 후보 전체에 맞추면 너무 멀어져 아무것도 안 보인다
+        var drawn = (activePath || []).concat(path || []);
+        var focusPoints = drawn.length > 1 ? drawn : pins;
+        if (focusPoints.length > 1) {
+          var bounds = new kakao.maps.LatLngBounds();
+          focusPoints.forEach(function (point) {
+            bounds.extend(new kakao.maps.LatLng(point.lat, point.lng));
+          });
+          map.setBounds(bounds, 60, 40, 60, 40);
+        } else if (primary) {
+          map.setCenter(primary);
+          map.setLevel(4);
+        }
+      };
+
       var focus = function (id) {
         var index = markers.findIndex(function (marker) { return marker.__planpId === id; });
         if (index >= 0) {
@@ -174,6 +312,8 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
       window.planpCommand = function (body) {
         var command = typeof body === 'string' ? JSON.parse(body) : body;
         if (command.type === 'search') { search(command.keyword); }
+        if (command.type === 'nearby') { searchNearbyParking(command.lat, command.lng, command.radius); }
+        if (command.type === 'pins') { drawPins(command.pins, command.path, command.activePath); }
         if (command.type === 'focus') { focus(command.id); }
       };
 

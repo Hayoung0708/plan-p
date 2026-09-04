@@ -1,52 +1,75 @@
-import { router } from 'expo-router';
-import { ArrowLeft, ExternalLink, Settings } from 'lucide-react';
+import { router, useLocalSearchParams } from 'expo-router';
 import type { JSX } from 'react';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { DriveButton } from '@/components/drive-button';
-import { MapPlaceholder } from '@/components/map-placeholder';
-import { CANDIDATE_QUEUE, LOW_CANDIDATE_THRESHOLD } from '@/constants/mock';
-import { Colors, Radius, Spacing } from '@/constants/theme';
-import { formatAvailability, formatFee, formatRemaining } from '@/utils/format';
+import { CandidatesSheet } from '@/components/candidates-sheet';
+import { LotCard } from '@/components/lot-card';
+import { SessionHeader } from '@/components/session-header';
+import { SessionMap } from '@/components/session-map';
+import { Colors, Spacing } from '@/constants/theme';
+import { useCurrentLocation } from '@/hooks/use-current-location';
+import { useKakaoNearby } from '@/hooks/use-kakao-nearby';
+import { useNearbyLots } from '@/hooks/use-nearby-lots';
+import type { NearbyLot } from '@/types/parking';
+import { radiusMetersFromWalkMinutes } from '@/utils/distance';
+import { distanceMeters, mergeLots } from '@/utils/merge-lots';
+import { buildRoute } from '@/utils/queue';
 
 const styles = StyleSheet.create({
-  banner: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    color: Colors.warn,
-    fontSize: 14,
-    marginBottom: Spacing.md,
-    padding: Spacing.md,
-  },
-  card: { padding: Spacing.lg },
-  counter: { color: Colors.text, fontSize: 16, fontWeight: '700' },
-  detail: { color: Colors.muted, fontSize: 15, marginTop: Spacing.xs },
-  done: {
-    color: Colors.muted,
-    fontSize: 15,
-    paddingVertical: Spacing.md,
-    textAlign: 'center',
-  },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-  },
-  lotName: { color: Colors.text, fontSize: 22, fontWeight: '700' },
-  navLink: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: Spacing.xs,
-    marginBottom: Spacing.md,
-    marginTop: Spacing.md,
-  },
-  navLinkText: { color: Colors.brand, fontSize: 16, fontWeight: '600' },
+  done: { color: Colors.muted, fontSize: 15, paddingVertical: Spacing.md, textAlign: 'center' },
+  map: { flex: 1 },
+  notice: { color: Colors.muted, fontSize: 15, padding: Spacing.xl, textAlign: 'center' },
   screen: { backgroundColor: Colors.background, flex: 1 },
 });
+
+/**
+ * 후보가 없을 때 뜨는 안내. 찾는 중인지 없는 건지 구분해 준다.
+ * @param props 로딩 여부와 오류
+ * @returns 안내 문구
+ */
+const EmptyNotice = ({ isLoading, error }: { isLoading: boolean; error: string }): JSX.Element => {
+  if (isLoading) {
+    return <Text style={styles.notice}>후보 찾는 중…</Text>;
+  }
+  return <Text style={styles.notice}>{error !== '' ? error : '반경 안에 주차장이 없습니다'}</Text>;
+};
+
+type GuideBodyProps = {
+  lot: NearbyLot | undefined;
+  remaining: number;
+  isLoading: boolean;
+  error: string;
+  onFull: () => void;
+  onParked: () => void;
+};
+
+/**
+ * 화면 하단. 후보가 있으면 안내 카드를, 없으면 이유를 보여 준다.
+ * @param props 현재 후보와 조회 상태, 버튼 처리
+ * @returns 하단 영역
+ */
+const GuideBody = ({
+  lot,
+  remaining,
+  isLoading,
+  error,
+  onFull,
+  onParked,
+}: GuideBodyProps): JSX.Element => {
+  if (lot === undefined) {
+    return <EmptyNotice error={error} isLoading={isLoading} />;
+  }
+  return (
+    <View>
+      <LotCard lot={lot} remaining={remaining} onFull={onFull} />
+      <Pressable onPress={onParked}>
+        <Text style={styles.done}>주차 완료</Text>
+      </Pressable>
+    </View>
+  );
+};
 
 /**
  * 안내 화면. 화면에 목적지는 하나, 버튼도 하나다.
@@ -54,9 +77,34 @@ const styles = StyleSheet.create({
  * @returns 안내 화면
  */
 const SessionScreen = (): JSX.Element => {
+  const params = useLocalSearchParams<{
+    lat?: string;
+    lng?: string;
+    walkMinutes?: string;
+    freeOnly?: string;
+  }>();
   const [index, setIndex] = useState(0);
-  const current = CANDIDATE_QUEUE[index];
-  const remaining = CANDIDATE_QUEUE.length - index - 1;
+  const [isListOpen, setIsListOpen] = useState(false);
+  const { lat = '', lng = '', walkMinutes = '10', freeOnly = 'false' } = params;
+
+  const center = { lat: Number(lat), lng: Number(lng) };
+  const nearby = { ...center, radius: radiusMetersFromWalkMinutes(Number(walkMinutes)) };
+  const isFreeOnly = freeOnly === 'true';
+  const { lots, isLoading, error } = useNearbyLots({
+    ...center,
+    walkMinutes: Number(walkMinutes),
+    freeOnly: isFreeOnly,
+  });
+  // 공공데이터에 없는 민영은 지도에서 조회해 화면에서만 합친다. 저장하지 않는다.
+  // 무료만 보기일 때는 요금을 모르는 민영을 섞으면 조건이 깨진다
+  const { lots: kakaoLots, handleMapEvent } = useKakaoNearby(center, distanceMeters);
+  // 지금 있는 곳에서 가까운 순으로 세워야 되돌아가는 동선이 안 생긴다.
+  // 위치 권한이 없으면 목적지를 기준점으로 쓴다
+  const { location } = useCurrentLocation();
+  const candidates = buildRoute(isFreeOnly ? lots : mergeLots(lots, kakaoLots), location ?? center);
+
+  const current = candidates[index];
+  const remaining = Math.max(candidates.length - index - 1, 0);
 
   /** 만차 신고 겸 다음 후보 전환. 후보가 없으면 반경을 넓히자고 제안한다 */
   const handleFull = (): void => {
@@ -67,43 +115,41 @@ const SessionScreen = (): JSX.Element => {
     setIndex(index + 1);
   };
 
+  /**
+   * 주차 완료. 세션을 끝내고 주차한 곳을 넘긴다.
+   * @returns 없음
+   */
+  const handleParked = (): void =>
+    router.replace({ params: { name: current?.name ?? '' }, pathname: '/parked' });
+
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Pressable onPress={(): void => router.replace('/')}>
-          <ArrowLeft color={Colors.muted} size={22} />
-        </Pressable>
-        <Pressable onPress={(): void => router.push('/candidates')}>
-          <Text style={styles.counter}>{formatRemaining(remaining)}</Text>
-        </Pressable>
-        <Pressable onPress={(): void => router.push('/settings')}>
-          <Settings color={Colors.muted} size={22} />
-        </Pressable>
+      <SessionHeader remaining={remaining} onPressCounter={(): void => setIsListOpen(true)} />
+
+      <View style={styles.map}>
+        <SessionMap
+          candidates={candidates}
+          index={index}
+          location={location}
+          nearby={nearby}
+          onEvent={handleMapEvent}
+        />
       </View>
 
-      <MapPlaceholder remaining={remaining} />
+      <GuideBody
+        error={error}
+        isLoading={isLoading}
+        lot={current}
+        remaining={remaining}
+        onFull={handleFull}
+        onParked={handleParked}
+      />
 
-      <View style={styles.card}>
-        {remaining <= LOW_CANDIDATE_THRESHOLD && (
-          <Text style={styles.banner}>후보가 {remaining}곳 남았어요 · 반경 넓히기</Text>
-        )}
-        <Text style={styles.lotName}>{current.name}</Text>
-        <Text style={styles.detail}>
-          도보 {current.walkMinutes}분 · 차로 {current.driveMinutes}분 ·{' '}
-          {formatFee(current.hourlyFee)}
-        </Text>
-        <Text style={styles.detail}>{formatAvailability(current.availability)}</Text>
-
-        <View style={styles.navLink}>
-          <ExternalLink color={Colors.brand} size={18} />
-          <Text style={styles.navLinkText}>내비로 열기</Text>
-        </View>
-
-        <DriveButton label="만차예요" onPress={handleFull} />
-        <Pressable onPress={(): void => router.replace('/parked')}>
-          <Text style={styles.done}>주차 완료</Text>
-        </Pressable>
-      </View>
+      <CandidatesSheet
+        isVisible={isListOpen}
+        lots={candidates.slice(index + 1)}
+        onClose={(): void => setIsListOpen(false)}
+      />
     </SafeAreaView>
   );
 };

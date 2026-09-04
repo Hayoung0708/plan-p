@@ -4,13 +4,22 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { DriveButton } from '@/components/drive-button';
+import { KakaoMap } from '@/components/kakao-map';
 import { SheetHeader } from '@/components/sheet-header';
-import { CANDIDATE_QUEUE, RADIUS_PRESETS } from '@/constants/mock';
+import { RADIUS_PRESETS } from '@/constants/parking';
 import { Colors, Radius, Spacing } from '@/constants/theme';
+import { useBuildingParking } from '@/hooks/use-building-parking';
+import { useKakaoNearby } from '@/hooks/use-kakao-nearby';
+import { useNearbyLots } from '@/hooks/use-nearby-lots';
+import { radiusMetersFromWalkMinutes } from '@/utils/distance';
+import type { BuildingParkingState } from '@/hooks/use-building-parking';
+import { distanceMeters, mergeLots } from '@/utils/merge-lots';
 
 const styles = StyleSheet.create({
   address: { color: Colors.muted, fontSize: 14, marginTop: Spacing.xs },
-  count: { color: Colors.muted, fontSize: 14, marginBottom: Spacing.lg },
+  count: { color: Colors.text, fontSize: 15, fontWeight: '600', marginBottom: Spacing.lg },
+  countMuted: { color: Colors.muted, fontWeight: '400' },
+  map: { borderRadius: Radius.md, height: 140, marginTop: Spacing.lg, overflow: 'hidden' },
   name: { color: Colors.text, fontSize: 22, fontWeight: '700' },
   notice: {
     backgroundColor: Colors.surface,
@@ -20,6 +29,7 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.lg,
     padding: Spacing.md,
   },
+  noticeWarn: { color: Colors.warn, fontWeight: '700' },
   preset: {
     alignItems: 'center',
     borderColor: Colors.border,
@@ -44,16 +54,81 @@ const styles = StyleSheet.create({
 });
 
 /**
- * 목적지 확인 시트. 검색에서 고른 장소를 받아 반경만 고르게 한다.
+ * 목적지 건물 자체의 주차 가능 여부. 없으면 확실히 없다고 말해 준다.
+ * 도착해서야 아는 것이 이 앱이 없애려는 경험이다.
+ * @param props 건물 주차 조회 상태
+ * @returns 안내 한 줄
+ */
+const BuildingNotice = ({ state }: { state: BuildingParkingState }): JSX.Element => {
+  const { parking, isLoading, error } = state;
+  if (isLoading) {
+    return <Text style={styles.notice}>건물 주차장 확인 중…</Text>;
+  }
+  if (error !== '' || parking === null) {
+    return <Text style={styles.notice}>건물 주차장 정보 없음</Text>;
+  }
+  if (parking.totalSpaces === 0) {
+    return <Text style={[styles.notice, styles.noticeWarn]}>이 건물 주차 불가</Text>;
+  }
+  return <Text style={styles.notice}>건물 주차 가능 · {parking.totalSpaces}면</Text>;
+};
+
+/**
+ * 후보 수 한 줄. 찾는 중·실패·성공을 같은 자리에 보여 준다.
+ * @param props 후보 수, 로딩 여부, 오류
+ * @returns 후보 수 문구
+ */
+const CandidateCount = ({
+  count,
+  isLoading,
+  error,
+}: {
+  count: number;
+  isLoading: boolean;
+  error: string;
+}): JSX.Element => {
+  if (isLoading) {
+    return <Text style={[styles.count, styles.countMuted]}>후보 찾는 중…</Text>;
+  }
+  if (error !== '') {
+    return <Text style={[styles.count, styles.countMuted]}>{error}</Text>;
+  }
+  return <Text style={styles.count}>후보 {count}곳 찾음</Text>;
+};
+
+/**
+ * 목적지 확인 시트. 반경과 무료 여부만 고르게 하고 후보 수를 먼저 알린다.
  *
- * 건물 자체 주차장 유무와 후보 수는 공공데이터를 붙인 뒤에 채운다.
+ * 건물 자체 주차장 유무는 건축물대장 API를 붙인 뒤에 채운다.
  * @returns 목적지 시트
  */
 const DestinationSheet = (): JSX.Element => {
-  const params = useLocalSearchParams<{ name?: string; address?: string }>();
+  const params = useLocalSearchParams<{
+    name?: string;
+    address?: string;
+    lat?: string;
+    lng?: string;
+  }>();
   const [walkMinutes, setWalkMinutes] = useState<number>(RADIUS_PRESETS[1]);
   const [freeOnly, setFreeOnly] = useState(false);
-  const { name = '목적지', address = '' } = params;
+  const { name = '목적지', address = '', lat = '', lng = '' } = params;
+
+  const center = { lat: Number(lat), lng: Number(lng) };
+  const { lots, isLoading, error } = useNearbyLots({ ...center, walkMinutes, freeOnly });
+  // 안내 화면과 같은 기준으로 세야 후보 수가 어긋나지 않는다
+  const { lots: kakaoLots, handleMapEvent } = useKakaoNearby(center, distanceMeters);
+  const candidates = freeOnly ? lots : mergeLots(lots, kakaoLots);
+  const building = useBuildingParking(address);
+
+  /**
+   * 후보를 들고 안내 화면으로. 같은 조건으로 다시 조회하도록 파라미터를 넘긴다.
+   * @returns 없음
+   */
+  const startGuiding = (): void =>
+    router.replace({
+      params: { freeOnly: String(freeOnly), lat, lng, walkMinutes: String(walkMinutes) },
+      pathname: '/session',
+    });
 
   return (
     <View style={styles.screen}>
@@ -61,7 +136,16 @@ const DestinationSheet = (): JSX.Element => {
       <Text style={styles.name}>{name}</Text>
       <Text style={styles.address}>{address}</Text>
 
-      <Text style={styles.notice}>건물 주차장 정보는 아직 연결 전입니다</Text>
+      <View style={styles.map}>
+        <KakaoMap
+          keyword=""
+          nearby={{ ...center, radius: radiusMetersFromWalkMinutes(walkMinutes) }}
+          pins={[{ id: 'destination', ...center, primary: true }]}
+          onEvent={handleMapEvent}
+        />
+      </View>
+
+      <BuildingNotice state={building} />
 
       <Text style={styles.sectionTitle}>반경</Text>
       <View style={styles.presetRow}>
@@ -84,9 +168,9 @@ const DestinationSheet = (): JSX.Element => {
         <Switch value={freeOnly} onValueChange={setFreeOnly} />
       </View>
 
-      <Text style={styles.count}>후보 {CANDIDATE_QUEUE.length}곳 (목데이터)</Text>
+      <CandidateCount count={candidates.length} error={error} isLoading={isLoading} />
 
-      <DriveButton label="안내 시작" onPress={(): void => router.replace('/session')} />
+      <DriveButton label="안내 시작" onPress={startGuiding} />
     </View>
   );
 };

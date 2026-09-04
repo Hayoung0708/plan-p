@@ -35,6 +35,18 @@ const IFRAME_STYLE = {
 } as const;
 
 /**
+ * 키가 없을 때 지도 자리에 띄우는 안내. 빈 화면이면 원인을 알 수 없다.
+ * @returns 안내 뷰
+ */
+const MissingKeyNotice = (): JSX.Element => (
+  <View style={styles.guideBox}>
+    <Text style={styles.guide}>
+      카카오 JavaScript 키가 없습니다. .env에 EXPO_PUBLIC_KAKAO_JS_KEY를 넣어주세요.
+    </Text>
+  </View>
+);
+
+/**
  * 웹에서의 지도. react-native-webview에는 웹 구현이 없어 같은 HTML을 iframe으로 띄운다.
  *
  * srcDoc이 아니라 /kakao-map 라우트를 가리킨다. srcDoc은 문서 주소가 about:srcdoc이라
@@ -42,17 +54,25 @@ const IFRAME_STYLE = {
  * @param props 검색어와 이벤트 처리
  * @returns 지도 뷰
  */
-export const KakaoMap = ({ keyword, onEvent }: KakaoMapProps): JSX.Element => {
+export const KakaoMap = ({
+  keyword,
+  onEvent,
+  nearby,
+  pins,
+  path,
+  activePath,
+}: KakaoMapProps): JSX.Element => {
   const frameRef = useRef<HTMLIFrameElement>(null);
   // 지도가 뜨기 전에 보낸 명령은 사라진다. ready를 받은 뒤에 다시 보낸다
   const [isReady, setIsReady] = useState(false);
 
-  const handleWindowMessage = useCallback(
-    (event: MessageEvent): void => {
-      if (typeof event.data !== 'string') {
-        return;
-      }
-      const parsed = parseMapEvent(event.data);
+  useEffect(() => {
+    /**
+     * 아이프레임이 올려보낸 메시지를 이벤트로 바꿔 넘긴다.
+     * @param event 창 메시지 이벤트
+     */
+    const handleMessage = (event: MessageEvent): void => {
+      const parsed = typeof event.data === 'string' ? parseMapEvent(event.data) : null;
       if (parsed === null) {
         return;
       }
@@ -60,30 +80,40 @@ export const KakaoMap = ({ keyword, onEvent }: KakaoMapProps): JSX.Element => {
         setIsReady(true);
       }
       onEvent(parsed);
+    };
+    window.addEventListener('message', handleMessage);
+    return (): void => window.removeEventListener('message', handleMessage);
+  }, [onEvent]);
+
+  // 명령은 지도가 준비된 뒤에만 내려보낸다. 그전에 보낸 건 사라진다
+  const send = useCallback(
+    (command: object): void => {
+      if (!isReady) {
+        return;
+      }
+      frameRef.current?.contentWindow?.postMessage(JSON.stringify(command), '*');
     },
-    [onEvent],
+    [isReady],
   );
 
   useEffect(() => {
-    window.addEventListener('message', handleWindowMessage);
-    return (): void => window.removeEventListener('message', handleWindowMessage);
-  }, [handleWindowMessage]);
+    send({ type: 'search', keyword });
+  }, [send, keyword]);
 
   useEffect(() => {
-    if (!isReady) {
-      return;
+    if (pins !== undefined) {
+      send({ type: 'pins', pins, path, activePath });
     }
-    frameRef.current?.contentWindow?.postMessage(JSON.stringify({ type: 'search', keyword }), '*');
-  }, [isReady, keyword]);
+  }, [send, pins, path, activePath]);
+
+  useEffect(() => {
+    if (nearby !== undefined) {
+      send({ type: 'nearby', ...nearby });
+    }
+  }, [send, nearby]);
 
   if (KAKAO_JS_KEY === '') {
-    return (
-      <View style={styles.guideBox}>
-        <Text style={styles.guide}>
-          카카오 JavaScript 키가 없습니다.{'\n'}.env에 EXPO_PUBLIC_KAKAO_JS_KEY를 넣어주세요.
-        </Text>
-      </View>
-    );
+    return <MissingKeyNotice />;
   }
 
   return (

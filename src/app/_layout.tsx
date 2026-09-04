@@ -15,7 +15,6 @@ const RootLayout = (): JSX.Element => (
       <Stack.Screen name="session" />
       <Stack.Screen name="parked" />
       <Stack.Screen name="destination" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="candidates" options={{ presentation: 'modal' }} />
       <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
     </Stack>
     <StatusBar style="auto" />
