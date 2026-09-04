@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react-native';
 import type { JSX } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 

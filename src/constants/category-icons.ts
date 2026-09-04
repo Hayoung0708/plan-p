@@ -18,8 +18,8 @@ import {
   Theater,
   TrainFront,
   Utensils,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+} from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 
 /**
  * 카카오 장소 카테고리 그룹 코드별 아이콘.

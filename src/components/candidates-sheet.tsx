@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { X } from 'lucide-react-native';
 import type { JSX } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 

@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { Search } from 'lucide-react-native';
 import type { JSX } from 'react';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';

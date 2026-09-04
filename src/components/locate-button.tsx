@@ -1,4 +1,4 @@
-import { LocateFixed, LocateOff } from 'lucide-react';
+import { LocateFixed, LocateOff } from 'lucide-react-native';
 import type { JSX } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 

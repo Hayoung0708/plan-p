@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { ChevronRight, MapPin, Search } from 'lucide-react';
+import { ChevronRight, MapPin, Search } from 'lucide-react-native';
 
 import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '@/constants/category-icons';
 import type { JSX } from 'react';
