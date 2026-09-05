@@ -5,11 +5,14 @@
 export const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JS_KEY ?? '';
 
 /**
- * 카카오 개발자 콘솔에 등록한 사이트 도메인.
- * 웹뷰는 about:blank로 뜨면 도메인 검사에 걸려 지도가 안 나온다. baseUrl로 이 값을 준다.
+ * 카카오 개발자 콘솔에 등록한 사이트 도메인. 웹뷰 문서 주소(baseUrl)로 쓴다.
+ *
+ * 반드시 https여야 한다. 카카오 SDK가 문서 프로토콜을 따라가는데(SECURE 판정),
+ * http면 지도 라이브러리와 API를 전부 평문으로 받아온다. 안드로이드 9+는 평문을 차단해서
+ * 지도도 검색도 통째로 죽는다.
  */
 export const KAKAO_SITE_DOMAIN =
-  process.env.EXPO_PUBLIC_KAKAO_SITE_DOMAIN ?? 'http://localhost:8081';
+  process.env.EXPO_PUBLIC_KAKAO_SITE_DOMAIN ?? 'https://localhost:8081';
 
 /** Supabase 프로젝트 URL. 주차장 원천 DB 조회에 쓴다 */
 export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
