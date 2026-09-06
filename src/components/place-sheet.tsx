@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { ChevronRight, MapPin, Search } from 'lucide-react-native';
-
-import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '@/constants/category-icons';
 import type { JSX } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedScrollHandler, useAnimatedStyle } from 'react-native-reanimated';
+import type { SharedValue } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SHEET_HEIGHT } from '@/constants/parking';
+import { Typo } from '@/components/ui/typo';
+import { CATEGORY_ICONS, DEFAULT_CATEGORY_ICON } from '@/constants/category-icons';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import type { MapPlace } from '@/utils/kakao-map-html';
 
@@ -14,96 +16,71 @@ export type PlaceSheetProps = {
   places: MapPlace[];
   /** 확정된 검색어. 비어 있으면 아직 검색 전이다 */
   keyword: string;
+  /** 스크롤 위치(px). 헤더가 시트 윗변이 닿았는지 판단하는 데 쓴다 */
+  scrollY: SharedValue<number>;
+  /** 접힌 시트 위로 보이는 지도 높이(px). 시트가 처음 놓이는 자리다 */
+  mapHeight: number;
+  /** 접힌 시트 높이(px). 결과가 있을 때와 없을 때가 다르다 */
+  sheetHeight: number;
 };
 
 const styles = StyleSheet.create({
-  address: { color: Colors.muted, fontSize: 13, marginTop: 3 },
-  category: { color: Colors.muted, flexShrink: 0, fontSize: 12 },
-  nameRow: { alignItems: 'baseline', flexDirection: 'row', gap: Spacing.sm },
-
-  count: { color: Colors.brand, fontSize: 15, fontWeight: '700' },
-  emptyBody: { color: Colors.muted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  // 시트 윗변 위쪽을 잘라내는 틀. 틀 밖(지도)에 닿은 터치는 스크롤뷰가 아니라 뒤의 지도로 간다
+  clip: { bottom: 0, left: 0, overflow: 'hidden', position: 'absolute', right: 0, top: 0 },
   emptyBox: {
     alignItems: 'center',
     flex: 1,
+    gap: Spacing.xs,
     justifyContent: 'center',
-    paddingBottom: Spacing.xl,
     paddingHorizontal: Spacing.xl,
   },
   emptyIcon: {
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    height: 48,
+    backgroundColor: Colors.brandSoft,
+    borderRadius: Radius.pill,
+    height: 56,
     justifyContent: 'center',
-    marginBottom: Spacing.md,
-    width: 48,
+    marginBottom: Spacing.sm,
+    width: 56,
   },
-  emptyTitle: {
-    color: Colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: Spacing.xs,
-  },
-  handle: {
-    alignSelf: 'center',
-    backgroundColor: Colors.border,
-    borderRadius: 3,
-    height: 5,
-    marginBottom: Spacing.md,
-    width: 40,
-  },
-  // 아이콘 폭만큼 들여 구분선이 글자 라인에 맞게 떨어진다
-  list: { paddingBottom: Spacing.xl },
+  // 마지막 행이 바닥에 딱 붙지 않을 만큼만. 행 사이 간격(24)의 절반
+  list: { paddingBottom: Spacing.md, paddingHorizontal: Spacing.lg },
+  nameRow: { alignItems: 'baseline', flexDirection: 'row', gap: Spacing.sm },
   pin: {
     alignItems: 'center',
     backgroundColor: Colors.brandSoft,
     borderRadius: Radius.md,
-    height: 36,
+    height: 40,
     justifyContent: 'center',
-    width: 36,
+    width: 40,
   },
+  // 높이는 틀과 같게 고정한다. bottom: 0으로 두면 top을 올릴 때 높이가 같이 늘어 끝까지 스크롤이 안 된다
+  scroll: { height: '100%', left: 0, position: 'absolute', right: 0 },
   row: {
     alignItems: 'center',
+    borderRadius: Radius.md,
     flexDirection: 'row',
     gap: Spacing.md,
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.sm,
     paddingVertical: Spacing.md,
   },
-  rowBody: { flex: 1 },
-  rowName: { color: Colors.text, fontSize: 16, fontWeight: '600' },
-  rowNameFlex: { flexShrink: 1 },
-  rowPressed: { backgroundColor: Colors.surface },
-  separator: {
-    backgroundColor: Colors.border,
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 64,
-  },
-  // 지도 위에 고정. 지도는 시트 뒤까지 그려져 화면 전체를 채운다
+  rowBody: { flex: 1, gap: 2 },
+  rowName: { flexShrink: 1 },
+  rowPressed: { backgroundColor: Colors.surfaceAlt },
+  // 시트 본체. 스크롤 콘텐츠라서 위로 밀면 화면 밖까지 그대로 올라간다
   sheet: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    bottom: 0,
-    elevation: 8,
-    height: SHEET_HEIGHT,
-    left: 0,
-    paddingTop: Spacing.sm,
-    position: 'absolute',
-    right: 0,
-    shadowColor: '#000',
-    shadowOffset: { height: -2, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
   },
   titleRow: {
-    alignItems: 'center',
+    alignItems: 'baseline',
     flexDirection: 'row',
     gap: Spacing.sm,
-    paddingBottom: Spacing.sm,
-    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.md,
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.xl,
   },
-  titleText: { color: Colors.text, fontSize: 15, fontWeight: '700' },
 });
 
 /**
@@ -111,19 +88,34 @@ const styles = StyleSheet.create({
  * @returns 빈 상태 뷰
  */
 const EmptyState = (): JSX.Element => (
-  <View style={styles.emptyBox}>
+  <>
     <View style={styles.emptyIcon}>
-      <Search color={Colors.muted} size={22} />
+      <Search color={Colors.brand} size={24} strokeWidth={2.5} />
     </View>
-    <Text style={styles.emptyTitle}>어디로 가세요?</Text>
-    <Text style={styles.emptyBody}>
+    <Typo variant="heading">어디로 가세요?</Typo>
+    <Typo style={{ textAlign: 'center' }} tone="secondary" variant="caption">
       목적지를 검색하면 주변 주차장을{'\n'}후보로 한 번에 잡아둡니다.
-    </Text>
-  </View>
+    </Typo>
+  </>
 );
 
 /**
- * 결과 한 줄. 이름 아래에 카테고리와 주소를 붙인다.
+ * 검색했는데 아무것도 못 찾았을 때.
+ * @param props 실패한 검색어
+ * @returns 빈 결과 안내
+ */
+const NoResult = ({ keyword }: { keyword: string }): JSX.Element => (
+  <>
+    <View style={styles.emptyIcon}>
+      <MapPin color={Colors.muted} size={24} />
+    </View>
+    <Typo variant="heading">결과가 없어요</Typo>
+    <Typo tone="secondary" variant="caption">{`'${keyword}'로 찾지 못했습니다`}</Typo>
+  </>
+);
+
+/**
+ * 결과 한 줄. 카테고리 아이콘, 이름, 주소.
  * @param props 장소 하나
  * @returns 목록 행
  */
@@ -141,76 +133,95 @@ const PlaceRow = ({ place }: { place: MapPlace }): JSX.Element => {
       }
     >
       <View style={styles.pin}>
-        <Icon color={Colors.brand} size={18} />
+        <Icon color={Colors.brand} size={20} />
       </View>
       <View style={styles.rowBody}>
         <View style={styles.nameRow}>
-          <Text numberOfLines={1} style={[styles.rowName, styles.rowNameFlex]}>
+          <Typo numberOfLines={1} style={styles.rowName} variant="bodyStrong">
             {name}
-          </Text>
+          </Typo>
           {category !== '' && (
-            <Text numberOfLines={1} style={styles.category}>
+            <Typo numberOfLines={1} tone="muted" variant="label">
               {category}
-            </Text>
+            </Typo>
           )}
         </View>
-        <Text numberOfLines={1} style={styles.address}>
+        <Typo numberOfLines={1} tone="secondary" variant="caption">
           {address}
-        </Text>
+        </Typo>
       </View>
-      <ChevronRight color={Colors.border} size={20} />
+      <ChevronRight color={Colors.muted} size={18} />
     </Pressable>
   );
 };
 
 /**
- * 검색 결과 시트. 결과는 목록으로, 검색 전에는 안내 문구로 채운다.
- * @param props 검색 결과와 검색어
- * @returns 하단 고정 시트
+ * 검색 결과 시트.
+ *
+ * 시트 안에 스크롤을 두지 않는다. 화면 전체를 덮는 스크롤 하나에 위쪽 투명 여백을 두고 그 아래 시트를 붙여서,
+ * 스크롤하면 시트 자체가 한 장처럼 위로 밀려 올라간다. 목록이 길면 시트가 화면 위를 지나 계속 올라간다.
+ *
+ * 스크롤뷰는 시트 윗변에서 시작하는 틀 안에 넣는다. 네이티브 스크롤뷰는 자기 영역의 터치를 전부 가져가서,
+ * 화면 전체로 두면 지도를 만질 수 없고 pointerEvents로 비켜 주면 스크롤이 죽는다.
+ * @param props 검색 결과, 검색어, 스크롤 위치, 지도·시트 높이
+ * @returns 하단 시트
  */
-export const PlaceSheet = ({ places, keyword }: PlaceSheetProps): JSX.Element => {
+export const PlaceSheet = ({
+  places,
+  keyword,
+  scrollY,
+  mapHeight,
+  sheetHeight,
+}: PlaceSheetProps): JSX.Element => {
   const hasResults = places.length > 0;
-  const isSearched = keyword !== '';
+  // 시트 바닥은 화면 끝까지 내려가고, 내용만 시스템 내비게이션 바 위에 놓는다
+  const { bottom } = useSafeAreaInsets();
+
+  const handleScroll = useAnimatedScrollHandler((event) => {
+    scrollY.set(event.contentOffset.y);
+  });
+
+  // 틀은 시트 윗변까지 내리고 스크롤뷰는 그만큼 되올려서 화면에서는 스크롤뷰가 제자리에 있고 틀만 움직인다.
+  // 스크롤뷰 자체를 움직이면 손가락 좌표가 매 프레임 어긋나 스크롤이 더듬거린다.
+  // 스크롤뷰 쪽은 transform이 아니라 top이어야 한다. RN이 스크롤뷰의 transform을 measure에 두 번 반영해서
+  // 눌린 자리가 실제와 어긋나고, 그러면 Pressable이 손가락이 벗어났다고 보고 탭을 버린다
+  const clipStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: Math.max(mapHeight - scrollY.value, 0) }],
+  }));
+  const scrollStyle = useAnimatedStyle(() => ({
+    top: -Math.max(mapHeight - scrollY.value, 0),
+  }));
 
   return (
-    <View style={styles.sheet}>
-      <View style={styles.handle} />
-
-      {hasResults && (
-        <View style={styles.titleRow}>
-          <Text style={styles.titleText}>검색 결과</Text>
-          <Text style={styles.count}>{places.length}</Text>
-        </View>
-      )}
-
-      {!hasResults && !isSearched && <EmptyState />}
-
-      {!hasResults && isSearched && (
-        <View style={styles.emptyBox}>
-          <View style={styles.emptyIcon}>
-            <MapPin color={Colors.muted} size={22} />
-          </View>
-          <Text style={styles.emptyTitle}>결과가 없어요</Text>
-          <Text
-            style={styles.emptyBody}
-          >{`'${keyword}'로 찾지 못했습니다. 다르게 적어보세요.`}</Text>
-        </View>
-      )}
-
-      {hasResults && (
-        <ScrollView
-          contentContainerStyle={styles.list}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {places.map((place, index) => (
-            <View key={place.id}>
-              {index > 0 && <View style={styles.separator} />}
-              <PlaceRow place={place} />
+    <Animated.View style={[styles.clip, clipStyle]}>
+      <Animated.ScrollView
+        scrollEnabled={hasResults}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        style={[styles.scroll, scrollStyle]}
+        onScroll={handleScroll}
+      >
+        <View style={{ height: mapHeight }} />
+        <View style={[styles.sheet, { minHeight: sheetHeight + bottom, paddingBottom: bottom }]}>
+          {hasResults ? (
+            <View style={styles.list}>
+              <View style={styles.titleRow}>
+                <Typo variant="heading">검색 결과</Typo>
+                <Typo tone="brand" variant="heading">
+                  {places.length}
+                </Typo>
+              </View>
+              {places.map((place) => (
+                <PlaceRow key={place.id} place={place} />
+              ))}
             </View>
-          ))}
-        </ScrollView>
-      )}
-    </View>
+          ) : (
+            <View style={styles.emptyBox}>
+              {keyword === '' ? <EmptyState /> : <NoResult keyword={keyword} />}
+            </View>
+          )}
+        </View>
+      </Animated.ScrollView>
+    </Animated.View>
   );
 };
