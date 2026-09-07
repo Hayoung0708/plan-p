@@ -1,8 +1,8 @@
 import { LocateFixed, LocateOff } from 'lucide-react-native';
 import type { JSX } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
 
-import { Colors, Radius } from '@/constants/theme';
+import { IconButton } from '@/components/ui/icon-button';
+import { Colors } from '@/constants/theme';
 
 export type LocateButtonProps = {
   /** 위치를 읽는 중이면 아이콘을 흐리게 둔다 */
@@ -11,23 +11,6 @@ export type LocateButtonProps = {
   isDenied: boolean;
   onPress: () => void;
 };
-
-const styles = StyleSheet.create({
-  button: {
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-    borderRadius: Radius.md,
-    elevation: 4,
-    height: 44,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { height: 2, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    width: 44,
-  },
-  pressed: { backgroundColor: Colors.surface },
-});
 
 /**
  * 내 위치 버튼.
@@ -38,16 +21,16 @@ const styles = StyleSheet.create({
  * @returns 플로팅 버튼
  */
 export const LocateButton = ({ isLoading, isDenied, onPress }: LocateButtonProps): JSX.Element => (
-  <Pressable
-    accessibilityLabel="내 위치"
-    accessibilityRole="button"
-    style={({ pressed }): (object | false)[] => [styles.button, pressed && styles.pressed]}
+  <IconButton
+    floating
+    icon={
+      isDenied ? (
+        <LocateOff color={Colors.muted} size={22} />
+      ) : (
+        <LocateFixed color={isLoading ? Colors.muted : Colors.brand} size={22} />
+      )
+    }
+    label="내 위치"
     onPress={onPress}
-  >
-    {isDenied ? (
-      <LocateOff color={Colors.muted} size={22} />
-    ) : (
-      <LocateFixed color={isLoading ? Colors.muted : Colors.brand} size={22} />
-    )}
-  </Pressable>
+  />
 );

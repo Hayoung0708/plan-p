@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
-import { ArrowLeft, Settings } from 'lucide-react-native';
+import { ArrowLeft, List, Settings } from 'lucide-react-native';
 import type { JSX } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { IconButton } from '@/components/ui/icon-button';
+import { Typo } from '@/components/ui/typo';
+import { Colors, Radius, Shadow, Spacing, TouchTarget } from '@/constants/theme';
 import { formatRemaining } from '@/utils/format';
 
 export type SessionHeaderProps = {
@@ -13,7 +15,17 @@ export type SessionHeaderProps = {
 };
 
 const styles = StyleSheet.create({
-  counter: { color: Colors.text, fontSize: 16, fontWeight: '700' },
+  // 지도 위에 떠 있는 알약. 남은 후보 수가 항상 보여야 뒤에 뭐가 남았는지 알고 앱을 믿는다
+  counter: {
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.pill,
+    boxShadow: Shadow.float,
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    minHeight: TouchTarget,
+    paddingHorizontal: Spacing.lg,
+  },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -25,28 +37,26 @@ const styles = StyleSheet.create({
 
 /**
  * 안내 화면 상단 바. 남은 후보 수를 항상 보여 준다.
- * 뒤에 뭐가 남았는지 모르면 앱을 안 믿고 직접 검색하게 된다.
  * @param props 남은 후보 수와 카운터 처리
  * @returns 상단 바
  */
 export const SessionHeader = ({ remaining, onPressCounter }: SessionHeaderProps): JSX.Element => (
   <View style={styles.header}>
-    <Pressable
-      accessibilityLabel="뒤로"
-      accessibilityRole="button"
-      onPress={(): void => router.replace('/')}
-    >
-      <ArrowLeft color={Colors.muted} size={22} />
+    <IconButton
+      floating
+      icon={<ArrowLeft color={Colors.text} size={22} />}
+      label="뒤로"
+      onPress={(): void => router.back()}
+    />
+    <Pressable accessibilityRole="button" style={styles.counter} onPress={onPressCounter}>
+      <List color={Colors.brand} size={18} />
+      <Typo variant="bodyStrong">{formatRemaining(remaining)}</Typo>
     </Pressable>
-    <Pressable accessibilityRole="button" onPress={onPressCounter}>
-      <Text style={styles.counter}>{formatRemaining(remaining)}</Text>
-    </Pressable>
-    <Pressable
-      accessibilityLabel="설정"
-      accessibilityRole="button"
+    <IconButton
+      floating
+      icon={<Settings color={Colors.text} size={22} />}
+      label="설정"
       onPress={(): void => router.push('/settings')}
-    >
-      <Settings color={Colors.muted} size={22} />
-    </Pressable>
+    />
   </View>
 );

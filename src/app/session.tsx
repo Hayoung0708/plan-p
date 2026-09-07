@@ -1,26 +1,24 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import type { JSX } from 'react';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CandidatesSheet } from '@/components/candidates-sheet';
 import { LotCard } from '@/components/lot-card';
 import { SessionHeader } from '@/components/session-header';
 import { SessionMap } from '@/components/session-map';
+import { Card } from '@/components/ui/card';
+import { Typo } from '@/components/ui/typo';
 import { Colors, Spacing } from '@/constants/theme';
-import { useCurrentLocation } from '@/hooks/use-current-location';
-import { useKakaoNearby } from '@/hooks/use-kakao-nearby';
-import { useNearbyLots } from '@/hooks/use-nearby-lots';
+import type { SessionQueryInput } from '@/hooks/use-session-query';
+import { useSessionQuery } from '@/hooks/use-session-query';
 import type { NearbyLot } from '@/types/parking';
-import { radiusMetersFromWalkMinutes } from '@/utils/distance';
-import { distanceMeters, mergeLots } from '@/utils/merge-lots';
-import { buildRoute } from '@/utils/queue';
 
 const styles = StyleSheet.create({
-  done: { color: Colors.muted, fontSize: 15, paddingVertical: Spacing.md, textAlign: 'center' },
-  map: { flex: 1 },
-  notice: { color: Colors.muted, fontSize: 15, padding: Spacing.xl, textAlign: 'center' },
+  // 카드는 지도 위에 떠 있다. 지도가 카드 뒤까지 이어져야 화면이 좁아 보이지 않는다
+  cardLayer: { bottom: 0, left: 0, padding: Spacing.lg, position: 'absolute', right: 0 },
+  notice: { alignItems: 'center' },
   screen: { backgroundColor: Colors.background, flex: 1 },
 });
 
@@ -29,12 +27,13 @@ const styles = StyleSheet.create({
  * @param props 로딩 여부와 오류
  * @returns 안내 문구
  */
-const EmptyNotice = ({ isLoading, error }: { isLoading: boolean; error: string }): JSX.Element => {
-  if (isLoading) {
-    return <Text style={styles.notice}>후보 찾는 중…</Text>;
-  }
-  return <Text style={styles.notice}>{error !== '' ? error : '반경 안에 주차장이 없습니다'}</Text>;
-};
+const EmptyNotice = ({ isLoading, error }: { isLoading: boolean; error: string }): JSX.Element => (
+  <Card floating style={styles.notice}>
+    <Typo tone="secondary" variant="body">
+      {isLoading ? '후보 찾는 중…' : error !== '' ? error : '반경 안에 주차장이 없습니다'}
+    </Typo>
+  </Card>
+);
 
 type GuideBodyProps = {
   lot: NearbyLot | undefined;
@@ -61,14 +60,7 @@ const GuideBody = ({
   if (lot === undefined) {
     return <EmptyNotice error={error} isLoading={isLoading} />;
   }
-  return (
-    <View>
-      <LotCard lot={lot} remaining={remaining} onFull={onFull} />
-      <Pressable onPress={onParked}>
-        <Text style={styles.done}>주차 완료</Text>
-      </Pressable>
-    </View>
-  );
+  return <LotCard lot={lot} remaining={remaining} onFull={onFull} onParked={onParked} />;
 };
 
 /**
@@ -77,31 +69,12 @@ const GuideBody = ({
  * @returns 안내 화면
  */
 const SessionScreen = (): JSX.Element => {
-  const params = useLocalSearchParams<{
-    lat?: string;
-    lng?: string;
-    walkMinutes?: string;
-    freeOnly?: string;
-  }>();
+  const params = useLocalSearchParams<SessionQueryInput>();
   const [index, setIndex] = useState(0);
   const [isListOpen, setIsListOpen] = useState(false);
-  const { lat = '', lng = '', walkMinutes = '10', freeOnly = 'false' } = params;
 
-  const center = { lat: Number(lat), lng: Number(lng) };
-  const nearby = { ...center, radius: radiusMetersFromWalkMinutes(Number(walkMinutes)) };
-  const isFreeOnly = freeOnly === 'true';
-  const { lots, isLoading, error } = useNearbyLots({
-    ...center,
-    walkMinutes: Number(walkMinutes),
-    freeOnly: isFreeOnly,
-  });
-  // 공공데이터에 없는 민영은 지도에서 조회해 화면에서만 합친다. 저장하지 않는다.
-  // 무료만 보기일 때는 요금을 모르는 민영을 섞으면 조건이 깨진다
-  const { lots: kakaoLots, handleMapEvent } = useKakaoNearby(center, distanceMeters);
-  // 지금 있는 곳에서 가까운 순으로 세워야 되돌아가는 동선이 안 생긴다.
-  // 위치 권한이 없으면 목적지를 기준점으로 쓴다
-  const { location } = useCurrentLocation();
-  const candidates = buildRoute(isFreeOnly ? lots : mergeLots(lots, kakaoLots), location ?? center);
+  const { candidates, nearby, location, isLoading, error, handleMapEvent } =
+    useSessionQuery(params);
 
   const current = candidates[index];
   const remaining = Math.max(candidates.length - index - 1, 0);
@@ -123,10 +96,8 @@ const SessionScreen = (): JSX.Element => {
     router.replace({ params: { name: current?.name ?? '' }, pathname: '/parked' });
 
   return (
-    <SafeAreaView style={styles.screen}>
-      <SessionHeader remaining={remaining} onPressCounter={(): void => setIsListOpen(true)} />
-
-      <View style={styles.map}>
+    <View style={styles.screen}>
+      <View style={StyleSheet.absoluteFill}>
         <SessionMap
           candidates={candidates}
           index={index}
@@ -136,21 +107,27 @@ const SessionScreen = (): JSX.Element => {
         />
       </View>
 
-      <GuideBody
-        error={error}
-        isLoading={isLoading}
-        lot={current}
-        remaining={remaining}
-        onFull={handleFull}
-        onParked={handleParked}
-      />
+      <SafeAreaView edges={['top']}>
+        <SessionHeader remaining={remaining} onPressCounter={(): void => setIsListOpen(true)} />
+      </SafeAreaView>
+
+      <SafeAreaView edges={['bottom']} style={styles.cardLayer}>
+        <GuideBody
+          error={error}
+          isLoading={isLoading}
+          lot={current}
+          remaining={remaining}
+          onFull={handleFull}
+          onParked={handleParked}
+        />
+      </SafeAreaView>
 
       <CandidatesSheet
         isVisible={isListOpen}
         lots={candidates.slice(index + 1)}
         onClose={(): void => setIsListOpen(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 

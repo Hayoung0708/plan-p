@@ -1,7 +1,10 @@
+import { Footprints, Gauge, Wallet } from 'lucide-react-native';
 import type { JSX } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { DriveButton } from '@/components/drive-button';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Typo } from '@/components/ui/typo';
 import { LOW_CANDIDATE_THRESHOLD } from '@/constants/parking';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import type { NearbyLot } from '@/types/parking';
@@ -13,38 +16,68 @@ export type LotCardProps = {
   /** 아직 안 가본 후보 수 */
   remaining: number;
   onFull: () => void;
+  onParked: () => void;
 };
 
 const styles = StyleSheet.create({
   banner: {
-    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    backgroundColor: Colors.warnSoft,
     borderRadius: Radius.md,
-    color: Colors.warn,
-    fontSize: 14,
-    marginBottom: Spacing.md,
+    flexDirection: 'row',
+    gap: Spacing.sm,
     padding: Spacing.md,
   },
-  card: { gap: Spacing.md, padding: Spacing.lg },
-  detail: { color: Colors.muted, fontSize: 15, marginTop: Spacing.xs },
-  name: { color: Colors.text, fontSize: 22, fontWeight: '700' },
+  card: { gap: Spacing.lg },
+  factItem: { alignItems: 'center', flexDirection: 'row', gap: Spacing.xs },
+  facts: { alignItems: 'center', flexDirection: 'row', gap: Spacing.lg },
+  head: { gap: Spacing.xs },
 });
 
 /**
  * 안내 화면 하단 카드. 현재 목적지 하나와 만차 버튼만 둔다.
- * @param props 현재 후보, 남은 후보 수, 만차 처리
+ * @param props 현재 후보, 남은 후보 수, 만차·완료 처리
  * @returns 안내 카드
  */
-export const LotCard = ({ lot, remaining, onFull }: LotCardProps): JSX.Element => (
-  <View style={styles.card}>
+export const LotCard = ({ lot, remaining, onFull, onParked }: LotCardProps): JSX.Element => (
+  <Card floating style={styles.card}>
     {remaining <= LOW_CANDIDATE_THRESHOLD && (
-      <Text style={styles.banner}>후보가 {remaining}곳 남았어요 · 반경 넓히기</Text>
+      <View style={styles.banner}>
+        <Gauge color={Colors.warn} size={16} />
+        <Typo tone="warn" variant="caption">
+          후보가 {remaining}곳 남았어요 · 반경 넓히기
+        </Typo>
+      </View>
     )}
-    <Text style={styles.name}>{lot.name}</Text>
-    <Text style={styles.detail}>
-      도보 {walkMinutesFromMeters(lot.distance_m)}분 · {formatFee(lot)}
-    </Text>
-    <Text style={styles.detail}>{formatSpaces(lot.total_spaces)} · 실시간 정보 없음</Text>
 
-    <DriveButton label="만차예요" onPress={onFull} />
-  </View>
+    <View style={styles.head}>
+      <Typo tone="muted" variant="label">
+        지금 가는 곳
+      </Typo>
+      <Typo numberOfLines={1} variant="title">
+        {lot.name}
+      </Typo>
+    </View>
+
+    <View style={styles.facts}>
+      <View style={styles.factItem}>
+        <Footprints color={Colors.textSecondary} size={16} />
+        <Typo tone="secondary" variant="caption">
+          도보 {walkMinutesFromMeters(lot.distance_m)}분
+        </Typo>
+      </View>
+      <View style={styles.factItem}>
+        <Wallet color={Colors.textSecondary} size={16} />
+        <Typo tone="secondary" variant="caption">
+          {formatFee(lot)}
+        </Typo>
+      </View>
+      <Typo tone="muted" variant="caption">
+        {formatSpaces(lot.total_spaces)}
+      </Typo>
+    </View>
+
+    <Button label="만차예요" size="drive" onPress={onFull} />
+    <Button label="주차 완료" variant="ghost" onPress={onParked} />
+  </Card>
 );

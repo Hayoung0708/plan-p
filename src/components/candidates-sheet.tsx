@@ -1,7 +1,9 @@
 import { X } from 'lucide-react-native';
 import type { JSX } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
+import { IconButton } from '@/components/ui/icon-button';
+import { Typo } from '@/components/ui/typo';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import type { NearbyLot } from '@/types/parking';
 import { walkMinutesFromMeters } from '@/utils/distance';
@@ -15,29 +17,48 @@ export type CandidatesSheetProps = {
 };
 
 const styles = StyleSheet.create({
-  backdrop: { backgroundColor: '#00000055', flex: 1, justifyContent: 'flex-end' },
-  detail: { color: Colors.muted, fontSize: 13, marginTop: 2 },
+  backdrop: { backgroundColor: Colors.scrim, flex: 1, justifyContent: 'flex-end' },
+  handle: {
+    alignSelf: 'center',
+    backgroundColor: Colors.border,
+    borderRadius: Radius.pill,
+    height: 5,
+    marginBottom: Spacing.lg,
+    width: 40,
+  },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: Spacing.xs,
   },
-  name: { color: Colors.text, fontSize: 16, fontWeight: '600' },
-  notice: { color: Colors.muted, fontSize: 13, marginBottom: Spacing.md },
+  list: { gap: Spacing.sm, paddingBottom: Spacing.xl },
+  order: {
+    alignItems: 'center',
+    backgroundColor: Colors.brandSoft,
+    borderRadius: Radius.pill,
+    height: 28,
+    justifyContent: 'center',
+    width: 28,
+  },
   row: {
-    borderBottomColor: Colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingVertical: Spacing.md,
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.md,
+    flexDirection: 'row',
+    gap: Spacing.md,
+    padding: Spacing.md,
   },
+  rowBody: { flex: 1, gap: 2 },
   sheet: {
-    backgroundColor: Colors.background,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    maxHeight: '70%',
-    padding: Spacing.xl,
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    maxHeight: '75%',
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
   },
-  title: { color: Colors.text, fontSize: 20, fontWeight: '700' },
+  titleRow: { alignItems: 'baseline', flexDirection: 'row', gap: Spacing.sm },
 });
 
 /**
@@ -54,21 +75,36 @@ export const CandidatesSheet = ({
   <Modal animationType="slide" transparent visible={isVisible} onRequestClose={onClose}>
     <Pressable style={styles.backdrop} onPress={onClose}>
       <View style={styles.sheet}>
+        <View style={styles.handle} />
         <View style={styles.header}>
-          <Text style={styles.title}>남은 후보 {lots.length}곳</Text>
-          <Pressable accessibilityLabel="닫기" accessibilityRole="button" onPress={onClose}>
-            <X color={Colors.muted} size={22} />
-          </Pressable>
+          <View style={styles.titleRow}>
+            <Typo variant="title">남은 후보</Typo>
+            <Typo tone="brand" variant="title">
+              {lots.length}
+            </Typo>
+          </View>
+          <IconButton icon={<X color={Colors.muted} size={22} />} label="닫기" onPress={onClose} />
         </View>
-        <Text style={styles.notice}>순서는 현재 위치가 바뀌면 다시 계산됩니다</Text>
-        <ScrollView>
-          {lots.map((lot) => (
+        <Typo style={{ marginBottom: Spacing.lg }} tone="muted" variant="caption">
+          순서는 현재 위치가 바뀌면 다시 계산됩니다
+        </Typo>
+        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          {lots.map((lot, order) => (
             <View key={lot.code} style={styles.row}>
-              <Text style={styles.name}>{lot.name}</Text>
-              <Text style={styles.detail}>
-                도보 {walkMinutesFromMeters(lot.distance_m)}분 · {formatFee(lot)}
-              </Text>
-              <Text style={styles.detail}>{formatSpaces(lot.total_spaces)}</Text>
+              <View style={styles.order}>
+                <Typo tone="brand" variant="label">
+                  {order + 2}
+                </Typo>
+              </View>
+              <View style={styles.rowBody}>
+                <Typo numberOfLines={1} variant="bodyStrong">
+                  {lot.name}
+                </Typo>
+                <Typo tone="secondary" variant="caption">
+                  도보 {walkMinutesFromMeters(lot.distance_m)}분 · {formatFee(lot)} ·{' '}
+                  {formatSpaces(lot.total_spaces)}
+                </Typo>
+              </View>
             </View>
           ))}
         </ScrollView>
