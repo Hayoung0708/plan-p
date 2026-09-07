@@ -19,6 +19,7 @@ export const toPins = (lots: NearbyLot[], currentIndex: number, previewCount = 0
       lat: lot.lat,
       lng: lot.lng,
       primary: order === currentIndex,
+      kind: 'parking',
       // 현재 다음 후보부터 순번을 붙인다. 1번은 지금 안내 중인 곳이라 마커로 따로 표시된다
       ...(isPreview ? { label: String(previewOrder + 1) } : {}),
     };

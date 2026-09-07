@@ -41,12 +41,18 @@ export type MapPin = {
   lng: number;
   /** 현재 안내 중인 곳. 하나만 강조하고 나머지는 작은 점으로 찍는다 */
   primary: boolean;
+  /** 장소(목적지)는 흰 점, 주차장은 P 글자. 지도만 보고도 무엇인지 구분된다 */
+  kind: 'place' | 'parking';
   /** 경로 미리보기에 붙일 순번. 없으면 그냥 점으로 찍는다 */
   label?: string;
 };
 
 /** 서울시청. 위치 권한을 받기 전 기본 중심 */
 const DEFAULT_CENTER = { lat: 37.5666805, lng: 126.9784147 };
+
+/** 지도 핀의 P 글자에 쓰는 SUIT ExtraBold. 웹뷰 안이라 앱에 번들된 글꼴을 못 쓴다 */
+const SUIT_EXTRA_BOLD_URL =
+  'https://cdn.jsdelivr.net/gh/sunn-us/SUIT@2/fonts/static/woff2/SUIT-ExtraBold.woff2';
 
 /**
  * 지도 웹뷰에 넣을 HTML을 만든다.
@@ -63,6 +69,13 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <style>
+  /* 핀의 P 글자용. 앱 본문과 같은 SUIT을 CDN에서 받는다. 못 받으면 시스템 굵은 글꼴로 떨어진다 */
+  @font-face {
+    font-family: 'SUIT';
+    font-weight: 800;
+    font-display: swap;
+    src: url('${SUIT_EXTRA_BOLD_URL}') format('woff2');
+  }
   html, body, #map { height: 100%; margin: 0; padding: 0; overflow: hidden; }
   #fallback { display: none; font: 14px -apple-system, system-ui, sans-serif; color: #6B7280; padding: 24px; }
 </style>
@@ -109,6 +122,26 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
         new ResizeObserver(relayout).observe(container);
       }
 
+      // 핀은 카카오 기본 마커 대신 앱 색으로 그린 물방울이다. 장소는 흰 점, 주차장은 P 글자를 얹는다.
+      // 끝이 좌표에 닿도록 아래 가운데를 기준점으로 둔다
+      var pinSvg = function (kind) {
+        var glyph = kind === 'parking'
+          ? '<text x="15" y="20" text-anchor="middle" font-family="SUIT, -apple-system, system-ui, sans-serif" font-weight="800" font-size="15" fill="#fff">P</text>'
+          : '<circle cx="15" cy="14.8" r="5" fill="#fff"/>';
+        return '<svg width="30" height="38" viewBox="0 0 30 38" xmlns="http://www.w3.org/2000/svg">' +
+          '<path d="M15 0C6.7 0 0 6.6 0 14.8c0 10.3 12.3 22 13.8 23.2a1.8 1.8 0 0 0 2.4 0C17.7 36.8 30 25.1 30 14.8 30 6.6 23.3 0 15 0z" fill="#2F6BFF"/>' +
+          glyph + '</svg>';
+      };
+      var pinOverlay = function (position, id, kind) {
+        var el = document.createElement('div');
+        el.innerHTML = pinSvg(kind);
+        el.style.cssText = 'width:30px;height:38px;cursor:pointer;filter:drop-shadow(0 3px 4px rgba(15,23,42,.3));';
+        el.onclick = function () { post({ type: 'select', id: id }); };
+        var overlay = new kakao.maps.CustomOverlay({ map: map, position: position, content: el, yAnchor: 1, zIndex: 5 });
+        overlay.__planpId = id;
+        return overlay;
+      };
+
       var clearMarkers = function () {
         markers.forEach(function (marker) { marker.setMap(null); });
         markers = [];
@@ -120,11 +153,7 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
         var bounds = new kakao.maps.LatLngBounds();
         list.forEach(function (place) {
           var position = new kakao.maps.LatLng(place.lat, place.lng);
-          var marker = new kakao.maps.Marker({ map: map, position: position });
-          kakao.maps.event.addListener(marker, 'click', function () {
-            post({ type: 'select', id: place.id });
-          });
-          markers.push(marker);
+          markers.push(pinOverlay(position, place.id, 'place'));
           bounds.extend(position);
         });
         if (list.length === 1) {
@@ -229,21 +258,21 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
         lines = [];
       };
 
-      // 순번이 붙은 후보는 원 안에 번호를 넣어 그린다. 미리보기 3곳이 여기 해당한다
+      // 순번이 붙은 후보는 원 안에 번호를 넣어 그린다. 미리보기 2·3번이 여기 해당한다
       var numberedDot = function (label) {
         var dot = document.createElement('div');
         dot.textContent = label;
         dot.style.cssText =
-          'width:22px;height:22px;border-radius:11px;background:#1D4ED8;color:#fff;' +
-          'font:700 12px/22px -apple-system,system-ui,sans-serif;text-align:center;' +
-          'border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);';
+          'width:26px;height:26px;border-radius:50%;background:#2F6BFF;color:#fff;' +
+          'font:800 13px/26px SUIT,-apple-system,system-ui,sans-serif;text-align:center;' +
+          'box-shadow:0 2px 6px rgba(15,23,42,.3);';
         return dot;
       };
 
       var plainDot = function () {
         var dot = document.createElement('div');
         dot.style.cssText =
-          'width:10px;height:10px;border-radius:5px;background:#1D4ED8;opacity:0.45;border:2px solid #fff;';
+          'width:12px;height:12px;border-radius:50%;background:#2F6BFF;opacity:0.45;';
         return dot;
       };
 
@@ -271,16 +300,11 @@ export const buildKakaoMapHtml = (jsKey: string): string => `<!doctype html>
           var position = new kakao.maps.LatLng(pin.lat, pin.lng);
           if (pin.primary) {
             primary = position;
-            var marker = new kakao.maps.Marker({ map: map, position: position });
-            kakao.maps.event.addListener(marker, 'click', function () {
-              post({ type: 'select', id: pin.id });
-            });
-            markers.push(marker);
+            markers.push(pinOverlay(position, pin.id, pin.kind));
             return;
           }
           var content = pin.label ? numberedDot(pin.label) : plainDot();
-          var overlay = new kakao.maps.CustomOverlay({ map: map, position: position, content: content });
-          overlays.push(overlay);
+          overlays.push(new kakao.maps.CustomOverlay({ map: map, position: position, content: content }));
         });
 
         // 지금 가야 할 길이 제일 또렷해야 한다. 뒤 후보는 미리보기라 흐린 점선으로 둔다
