@@ -74,6 +74,11 @@ export const KakaoMap = ({
      * @param event 창 메시지 이벤트
      */
     const handleMessage = (event: MessageEvent): void => {
+      // 지도가 화면마다 하나씩 떠 있어서 창에는 여러 아이프레임의 메시지가 섞여 온다.
+      // 목적지 화면 지도의 빈 결과가 홈 목록을 지우는 일이 있었다. 내 아이프레임 것만 받는다
+      if (event.source !== frameRef.current?.contentWindow) {
+        return;
+      }
       const parsed = typeof event.data === 'string' ? parseMapEvent(event.data) : null;
       if (parsed === null) {
         return;
